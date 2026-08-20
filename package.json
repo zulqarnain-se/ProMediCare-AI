@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "seed": "node --env-file=.env.local scripts/seed.mjs",
     "test:e2e": "playwright test",
+    "test:e2e:ai": "playwright test e2e/ai.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "test:e2e:install": "playwright install chromium"
