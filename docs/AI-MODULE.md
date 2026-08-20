@@ -62,4 +62,4 @@ import { runSymptomPrediction, verifyGroq, isGroqConfigured } from "@/ai";
 3. Log screenings to `predictions` from feature actions (audit / doctor review).
 4. UI disclaimer is mandatory on every patient-facing AI surface.
 
-See also: [ProMediCare-AI-Cursor-Prompt.md](./ProMediCare-AI-Cursor-Prompt.md) · [TESTING.md](./TESTING.md).
+See also: [MEMBER-3.md](./MEMBER-3.md) · [ProMediCare-AI-Cursor-Prompt.md](./ProMediCare-AI-Cursor-Prompt.md) · [TESTING.md](./TESTING.md).

@@ -65,4 +65,4 @@ AI E2E **does not require** a live `GROQ_API_KEY`. The UI must show a result (li
 - Local `webServer`: `npm run build && npm run start`
 - External mode when `PLAYWRIGHT_BASE_URL` is set
 
-See also: [AI Module](./AI-MODULE.md).
+See also: [AI Module](./AI-MODULE.md) · [Member 3 guide](./MEMBER-3.md).
