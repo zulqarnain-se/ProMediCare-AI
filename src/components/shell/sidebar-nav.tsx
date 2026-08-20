@@ -1,0 +1,138 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import type { NavItem } from "@/components/shell/nav-config";
+import { fetchPendingAppointmentNavBadge } from "@/features/appointments/nav-badges";
+import { scheduleStalledNavGuard } from "@/lib/nav/nav-fallback";
+import { cn } from "@/lib/utils";
+
+type Props = {
+  items: NavItem[];
+  onNavigate?: () => void;
+  initialBadges?: Record<string, number>;
+  pendingAppointmentsHref?: string;
+  pollBadges?: boolean;
+};
+
+export function SidebarNav({
+  items,
+  onNavigate,
+  initialBadges = {},
+  pendingAppointmentsHref,
+  pollBadges = true,
+}: Props) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const t = useTranslations("nav");
+  const tCommon = useTranslations("common");
+  const pathnameRef = useRef(pathname);
+  const latestHrefRef = useRef<string | null>(null);
+  const [badges, setBadges] = useState<Record<string, number>>(initialBadges);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    setBadges(initialBadges);
+  }, [initialBadges]);
+
+  const refreshPending = useCallback(async () => {
+    if (!pendingAppointmentsHref) return;
+    try {
+      const count = await fetchPendingAppointmentNavBadge();
+      setBadges((prev) => ({ ...prev, [pendingAppointmentsHref]: count }));
+    } catch {
+      // Ignore poll failures (session expired, etc.).
+    }
+  }, [pendingAppointmentsHref]);
+
+  useEffect(() => {
+    if (!pendingAppointmentsHref || !pollBadges) return;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refreshPending();
+    };
+    const interval = setInterval(tick, 30_000);
+    return () => clearInterval(interval);
+  }, [pendingAppointmentsHref, pollBadges, refreshPending]);
+
+  function handleNavClick(href: string) {
+    onNavigate?.();
+    if (pathnameRef.current === href) return;
+
+    latestHrefRef.current = href;
+    router.push(href);
+
+    scheduleStalledNavGuard(
+      href,
+      () => pathnameRef.current === href,
+      () => latestHrefRef.current === href,
+    );
+  }
+
+  return (
+    <nav className="grid gap-1 px-3">
+      {items.map((item) => {
+        const hasNestedNavChildren = items.some(
+          (other) => other.href !== item.href && other.href.startsWith(`${item.href}/`),
+        );
+        const active =
+          pathname === item.href ||
+          (item.href !== "/" &&
+            !hasNestedNavChildren &&
+            pathname.startsWith(`${item.href}/`));
+        const Icon = item.icon;
+        const badge = badges[item.href] ?? 0;
+        const labelText = t(item.labelKey);
+        const ariaLabel =
+          badge > 0
+            ? `${labelText}, ${tCommon("pendingRequests", { count: badge })}`
+            : undefined;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            prefetch={false}
+            onClick={() => handleNavClick(item.href)}
+            aria-current={active ? "page" : undefined}
+            aria-label={ariaLabel}
+            className={cn(
+              "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:translate-x-0.5 hover:bg-muted/80 hover:text-foreground",
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "absolute start-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-e-full bg-gradient-to-b from-brand to-[oklch(0.55_0.12_165)] transition-opacity",
+                active ? "opacity-100" : "opacity-0",
+              )}
+            />
+            <Icon
+              className={cn(
+                "size-4 shrink-0 transition-colors",
+                active ? "text-brand" : "text-muted-foreground group-hover:text-foreground",
+              )}
+              aria-hidden
+            />
+            <span className="min-w-0 flex-1 truncate">{labelText}</span>
+            {badge > 0 ? (
+              <span
+                className="inline-flex min-w-5 items-center justify-center rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white tabular-nums"
+                aria-hidden
+              >
+                {badge > 99 ? "99+" : badge}
+              </span>
+            ) : null}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
