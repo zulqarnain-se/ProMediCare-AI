@@ -6,6 +6,18 @@ export async function expectAiDisclaimer(page: Page) {
 }
 
 /**
+ * Assert screening result UI is present (live Groq or safe fallback).
+ * Looks for risk level labels and specialty recommendation copy.
+ */
+export async function expectScreeningResult(page: Page) {
+  await expect(page.getByRole("button", { name: /run another check/i })).toBeVisible();
+  await expect(
+    page.getByText(/low|medium|high|urgent|risk|recommended specialty|general medicine|cardiology/i).first(),
+  ).toBeVisible();
+  await expectAiDisclaimer(page);
+}
+
+/**
  * Complete the patient symptom-check happy path.
  * Accepts either a live Groq result or the safe degraded fallback UI.
  */
@@ -20,5 +32,5 @@ export async function runSymptomCheckFlow(page: Page) {
   await expect(page.getByRole("button", { name: /run another check/i })).toBeVisible({
     timeout: 60_000,
   });
-  await expectAiDisclaimer(page);
+  await expectScreeningResult(page);
 }

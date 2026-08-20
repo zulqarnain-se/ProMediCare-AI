@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { stateFile } from "./constants";
-import { expectAiDisclaimer, runSymptomCheckFlow } from "./helpers";
+import {
+  expectAiDisclaimer,
+  expectScreeningResult,
+  runSymptomCheckFlow,
+} from "./helpers";
 
 /**
  * Focused AI screening E2E (Member 3).
@@ -12,7 +16,15 @@ test.describe("AI symptom screening", () => {
   test("patient can run screening and sees disclaimer", async ({ page }) => {
     test.setTimeout(90_000);
     await runSymptomCheckFlow(page);
-    await expect(page.getByText(/recommended specialty|general medicine|cardiology/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/recommended specialty|general medicine|cardiology/i).first(),
+    ).toBeVisible();
+  });
+
+  test("screening result shows risk context", async ({ page }) => {
+    test.setTimeout(90_000);
+    await runSymptomCheckFlow(page);
+    await expectScreeningResult(page);
   });
 
   test("screenings history remains reachable after a check", async ({ page }) => {
@@ -20,6 +32,12 @@ test.describe("AI symptom screening", () => {
     await runSymptomCheckFlow(page);
     await page.goto("/patient/screenings");
     await expect(page.getByRole("heading", { name: /screenings/i })).toBeVisible();
+    await expectAiDisclaimer(page);
+  });
+
+  test("symptom check page shows disclaimer before running AI", async ({ page }) => {
+    await page.goto("/patient/symptom-check");
+    await expect(page.getByRole("heading", { name: /symptom check/i })).toBeVisible();
     await expectAiDisclaimer(page);
   });
 });
