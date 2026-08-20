@@ -12,6 +12,7 @@ import {
   buildSymptomUserPrompt,
   buildClinicalBriefUserPrompt,
 } from "@/ai/prompts";
+import { snapSpecialtyToAllowed } from "@/ai/specialty";
 import type { ParsedScreeningIntake } from "@/features/patient/intake-parser";
 import type {
   ChatMessage,
@@ -31,6 +32,19 @@ export function isGroqConfigured(): boolean {
   return Boolean(process.env.GROQ_API_KEY);
 }
 
+function describeHttpError(status: number): string {
+  if (status === 401 || status === 403) {
+    return `AI authentication failed (HTTP ${status}). Check GROQ_API_KEY.`;
+  }
+  if (status === 429) {
+    return `AI rate limit reached (HTTP ${status}). Retry shortly.`;
+  }
+  if (status >= 500) {
+    return `AI provider unavailable (HTTP ${status}).`;
+  }
+  return `AI service responded with HTTP ${status}.`;
+}
+
 /**
  * Single choke point for every Groq call. Requests JSON-only output, then
  * validates it against a Zod schema before returning. Never trusts raw output.
@@ -43,7 +57,7 @@ async function callGroqJSON<T>(
   const { apiKey, baseUrl, model } = getConfig();
   if (!apiKey) return { ok: false, error: "AI is not configured (missing GROQ_API_KEY)." };
 
-  let lastError = "Unknown error";
+  let lastError = "Unknown AI error";
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -66,7 +80,7 @@ async function callGroqJSON<T>(
       clearTimeout(timeout);
 
       if (!res.ok) {
-        lastError = `AI service responded with ${res.status}`;
+        lastError = describeHttpError(res.status);
         continue;
       }
 
@@ -75,7 +89,7 @@ async function callGroqJSON<T>(
       };
       const content = payload.choices?.[0]?.message?.content;
       if (!content) {
-        lastError = "AI returned an empty response";
+        lastError = "AI returned an empty response body.";
         continue;
       }
 
@@ -83,13 +97,13 @@ async function callGroqJSON<T>(
       try {
         parsed = JSON.parse(content);
       } catch {
-        lastError = "AI returned malformed JSON";
+        lastError = "AI returned malformed JSON (expected a JSON object).";
         continue;
       }
 
       const result = schema.safeParse(parsed);
       if (!result.success) {
-        lastError = "AI response failed validation";
+        lastError = "AI response failed Zod schema validation.";
         continue;
       }
 
@@ -97,8 +111,8 @@ async function callGroqJSON<T>(
     } catch (err) {
       lastError =
         err instanceof Error && err.name === "AbortError"
-          ? "AI request timed out"
-          : "AI request failed";
+          ? "AI request timed out after 20s."
+          : "AI request failed (network or unexpected error).";
     }
   }
 
@@ -120,20 +134,6 @@ export function fallbackPrediction(): AiPrediction {
   };
 }
 
-function snapSpecialty(recommended: string, names: string[]): string {
-  const matched = names.find(
-    (n) => n.trim().toLowerCase() === recommended.trim().toLowerCase(),
-  );
-  if (matched) return matched;
-
-  const fuzzy = names.find((n) => {
-    const a = n.trim().toLowerCase();
-    const b = recommended.trim().toLowerCase();
-    return a.includes(b) || b.includes(a);
-  });
-  return fuzzy ?? names[0] ?? "General Medicine";
-}
-
 /** Runs symptom-based risk screening. Always returns a usable result. */
 export async function runSymptomPrediction(
   input: SymptomIntakeInput,
@@ -148,7 +148,10 @@ export async function runSymptomPrediction(
   if (result.ok) {
     const prediction = {
       ...result.data,
-      recommended_specialty: snapSpecialty(result.data.recommended_specialty, names),
+      recommended_specialty: snapSpecialtyToAllowed(
+        result.data.recommended_specialty,
+        names,
+      ),
     };
     return { prediction, model: result.model, degraded: false };
   }

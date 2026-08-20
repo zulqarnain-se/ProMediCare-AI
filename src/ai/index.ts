@@ -12,6 +12,8 @@ export {
   verifyGroq,
 } from "@/ai/groq-client";
 
+export { snapSpecialtyToAllowed } from "@/ai/specialty";
+
 export type {
   GroqResult,
   ChatMessage,
